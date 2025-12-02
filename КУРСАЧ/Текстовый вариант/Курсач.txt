@@ -108,6 +108,14 @@
             background: #0056b3;
         }
         
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
         .form-group {
             margin-bottom: 15px;
         }
@@ -147,6 +155,13 @@
         .help-section h4 {
             color: #007bff;
             margin-bottom: 10px;
+        }
+        
+        .download-buttons {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
     </style>
 </head>
@@ -195,12 +210,7 @@
                 <h4>Добавить/Редактировать ученика</h4>
                 <div class="form-group">
                     <label>Класс:</label>
-                    <select id="studentClass" class="form-control">
-                        <option value="10A">10A</option>
-                        <option value="10B">10B</option>
-                        <option value="11A">11A</option>
-                        <option value="11B">11B</option>
-                    </select>
+                    <input type="text" id="studentClass" class="form-control" placeholder="Например: 10A, 11B и т.д.">
                 </div>
                 <div class="form-group">
                     <label>ФИО ученика:</label>
@@ -226,7 +236,12 @@
                 <button class="btn" onclick="addStudent()">Добавить ученика</button>
                 <button class="btn" onclick="updateStudent()">Обновить данные</button>
                 <button class="btn" onclick="deleteStudent()">Удалить ученика</button>
-                <button class="btn" onclick="downloadJournal()">Сохранить журнал</button>
+                
+                <div class="download-buttons">
+                    <button class="btn" onclick="downloadJournal('csv')">📥 Скачать CSV</button>
+                    <button class="btn" onclick="downloadJournal('excel')">📥 Скачать Excel</button>
+                    <button class="btn" onclick="downloadJournal('txt')">📥 Скачать TXT</button>
+                </div>
             </div>
             
             <div class="card">
@@ -279,7 +294,7 @@
                 <h4>📁 Вкладка "Загрузка оценок"</h4>
                 <p>Предназначена для импорта данных из файлов формата CSV, TXT, XLSX.</p>
                 <p><strong>Формат CSV файла:</strong></p>
-                <pre>Класс,ФИО,Математика,Русский_язык,Физика,Литература
+                <pre>Класс,ФИО,Математика,Русский язык,Физика,Литература
 10A,Иванов А.И.,5,4,5,4
 10A,Петрова С.К.,4,5,4,5</pre>
             </div>
@@ -288,6 +303,7 @@
                 <h4>✏️ Вкладка "Редактирование журнала"</h4>
                 <p>Позволяет вручную добавлять, редактировать и удалять записи об учениках.</p>
                 <p>Для редактирования выберите ученика из таблицы, внесите изменения и нажмите "Обновить данные".</p>
+                <p><strong>При добавлении ученика введите название класса вручную</strong>, например: 10A, 11B, 9В и т.д.</p>
             </div>
 
             <div class="card help-section">
@@ -312,11 +328,11 @@
             <div class="card">
                 <div class="developer-info">
                     <img src="https://via.placeholder.com/150" alt="Фото разработчика" class="developer-photo" id="developerPhoto">
-                    <h3>Иванов Иван Иванович</h3>
+                    <h3>Ларин Никита Алексеевич</h3>
                     <p><strong>Разработчик электронного журнала оценок</strong></p>
-                    <p>📧 Email: ivanov@example.com</p>
+                    <p>📧 Email: nik_larin_04@mail.ru</p>
                     <p>📞 Телефон: +7 (999) 123-45-67</p>
-                    <p>🌐 GitHub: github.com/ivanov</p>
+                    <p>🌐 GitHub: github.com/glojj27</p>
                 </div>
                 
                 <div style="margin-top: 20px;">
@@ -330,10 +346,55 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
         let students = [];
         let selectedStudentIndex = null;
         let charts = {};
+
+        // Унифицированные имена полей
+        const FIELD_NAMES = {
+            class: 'Класс',
+            name: 'ФИО',
+            math: 'Математика',
+            russian: 'Русский язык',
+            physics: 'Физика',
+            literature: 'Литература'
+        };
+
+        // Вспомогательная функция для нормализации имен полей
+        function normalizeFieldName(fieldName) {
+            const field = fieldName.trim();
+            const mappings = {
+                'Класс': FIELD_NAMES.class,
+                'ФИО': FIELD_NAMES.name,
+                'Математика': FIELD_NAMES.math,
+                'Math': FIELD_NAMES.math,
+                'Русский_язык': FIELD_NAMES.russian,
+                'Русский язык': FIELD_NAMES.russian,
+                'Russian': FIELD_NAMES.russian,
+                'Физика': FIELD_NAMES.physics,
+                'Physics': FIELD_NAMES.physics,
+                'Литература': FIELD_NAMES.literature,
+                'Literature': FIELD_NAMES.literature
+            };
+            
+            return mappings[field] || field;
+        }
+
+        // Вспомогательная функция для получения уникальных классов
+        function getUniqueClasses() {
+            const classes = new Set();
+            students.forEach(student => {
+                if (student[FIELD_NAMES.class]) {
+                    const className = student[FIELD_NAMES.class].toString().trim();
+                    if (className) {
+                        classes.add(className);
+                    }
+                }
+            });
+            return Array.from(classes).sort();
+        }
 
         class GradeJournal {
             constructor() {
@@ -380,23 +441,25 @@
             renderAllTables() {
                 this.renderUploadedTable();
                 this.renderGradeTable();
+                this.updateFileInfo();
             }
 
             renderUploadedTable() {
                 const container = document.getElementById('uploadedTable');
                 container.innerHTML = this.generateTableHTML(students);
-                this.updateFileInfo();
             }
 
             renderGradeTable() {
                 const container = document.getElementById('gradeTable');
                 container.innerHTML = this.generateTableHTML(students, true);
                 
-                container.querySelectorAll('tr').forEach((row, index) => {
-                    if (index > 0) {
-                        row.addEventListener('click', () => this.selectStudent(row, index - 1));
-                    }
-                });
+                // Добавляем обработчики кликов на строки
+                setTimeout(() => {
+                    const rows = container.querySelectorAll('tbody tr');
+                    rows.forEach((row, index) => {
+                        row.addEventListener('click', () => this.selectStudent(row, index));
+                    });
+                }, 0);
             }
 
             renderStatsTables() {
@@ -406,8 +469,13 @@
 
             renderClassStatsTable() {
                 const container = document.getElementById('classStatsTable');
-                const classes = [...new Set(students.map(s => s.Класс))];
-                const subjects = ['Математика', 'Русский_язык', 'Физика', 'Литература'];
+                const classes = getUniqueClasses();
+                const subjects = [FIELD_NAMES.math, FIELD_NAMES.russian, FIELD_NAMES.physics, FIELD_NAMES.literature];
+
+                if (classes.length === 0 || students.length === 0) {
+                    container.innerHTML = '<p>Нет данных для отображения</p>';
+                    return;
+                }
 
                 let html = '<table><tr><th>Класс</th><th>Предмет</th><th>Средняя</th><th>Медиана</th>';
                 for (let i = 1; i <= 5; i++) {
@@ -417,7 +485,7 @@
 
                 classes.forEach(className => {
                     subjects.forEach(subject => {
-                        const classStudents = students.filter(s => s.Класс === className);
+                        const classStudents = students.filter(s => s[FIELD_NAMES.class] === className);
                         const stats = this.calculateSubjectStats(classStudents, subject);
                         html += `<tr>
                             <td>${className}</td>
@@ -438,7 +506,12 @@
 
             renderOverallStatsTable() {
                 const container = document.getElementById('overallStatsTable');
-                const subjects = ['Математика', 'Русский_язык', 'Физика', 'Литература'];
+                const subjects = [FIELD_NAMES.math, FIELD_NAMES.russian, FIELD_NAMES.physics, FIELD_NAMES.literature];
+
+                if (students.length === 0) {
+                    container.innerHTML = '<p>Нет данных для отображения</p>';
+                    return;
+                }
 
                 let html = '<table><tr><th>Предмет</th><th>Средняя</th><th>Медиана</th>';
                 for (let i = 1; i <= 5; i++) {
@@ -464,7 +537,11 @@
             }
 
             calculateSubjectStats(studentsList, subject) {
-                const grades = studentsList.map(s => parseInt(s[subject])).filter(g => !isNaN(g));
+                const grades = studentsList.map(s => {
+                    const grade = s[subject];
+                    return grade ? parseInt(grade) : NaN;
+                }).filter(g => !isNaN(g));
+                
                 if (grades.length === 0) return { average: 0, median: 0, gradeCount: {}, gradePercent: {} };
 
                 const average = grades.reduce((a, b) => a + b, 0) / grades.length;
@@ -500,13 +577,22 @@
 
             renderClassAvgChart() {
                 const ctx = document.getElementById('classAvgChart').getContext('2d');
-                const classes = [...new Set(students.map(s => s.Класс))];
-                const subjects = ['Математика', 'Русский_язык', 'Физика', 'Литература'];
+                const classes = getUniqueClasses();
+                const subjects = [FIELD_NAMES.math, FIELD_NAMES.russian, FIELD_NAMES.physics, FIELD_NAMES.literature];
+
+                if (classes.length === 0 || students.length === 0) {
+                    ctx.canvas.parentElement.innerHTML = '<p>Нет данных для построения графика</p>';
+                    return;
+                }
 
                 const datasets = subjects.map((subject, index) => {
                     const data = classes.map(className => {
-                        const classStudents = students.filter(s => s.Класс === className);
-                        const grades = classStudents.map(s => parseInt(s[subject])).filter(g => !isNaN(g));
+                        const classStudents = students.filter(s => s[FIELD_NAMES.class] === className);
+                        const grades = classStudents.map(s => {
+                            const grade = s[subject];
+                            return grade ? parseInt(grade) : NaN;
+                        }).filter(g => !isNaN(g));
+                        
                         return grades.length > 0 ? (grades.reduce((a, b) => a + b, 0) / grades.length) : 0;
                     });
 
@@ -558,16 +644,24 @@
 
             renderGradeDistributionChart() {
                 const ctx = document.getElementById('gradeDistributionChart').getContext('2d');
-                const subjects = ['Математика', 'Русский_язык', 'Физика', 'Литература'];
+                const subjects = [FIELD_NAMES.math, FIELD_NAMES.russian, FIELD_NAMES.physics, FIELD_NAMES.literature];
                 
+                if (students.length === 0) {
+                    ctx.canvas.parentElement.innerHTML = '<p>Нет данных для построения графика</p>';
+                    return;
+                }
+
                 const datasets = [];
                 const colors = ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff'];
 
                 for (let grade = 1; grade <= 5; grade++) {
                     const data = subjects.map(subject => {
-                        const grades = students.map(s => parseInt(s[subject])).filter(g => !isNaN(g));
-                        const count = grades.filter(g => g === grade).length;
-                        return count;
+                        const grades = students.map(s => {
+                            const g = s[subject];
+                            return g ? parseInt(g) : NaN;
+                        }).filter(g => !isNaN(g));
+                        
+                        return grades.filter(g => g === grade).length;
                     });
 
                     datasets.push({
@@ -612,10 +706,19 @@
 
             renderOverallPerformanceChart() {
                 const ctx = document.getElementById('overallPerformanceChart').getContext('2d');
-                const subjects = ['Математика', 'Русский_язык', 'Физика', 'Литература'];
+                const subjects = [FIELD_NAMES.math, FIELD_NAMES.russian, FIELD_NAMES.physics, FIELD_NAMES.literature];
                 
+                if (students.length === 0) {
+                    ctx.canvas.parentElement.innerHTML = '<p>Нет данных для построения графика</p>';
+                    return;
+                }
+
                 const averages = subjects.map(subject => {
-                    const grades = students.map(s => parseInt(s[subject])).filter(g => !isNaN(g));
+                    const grades = students.map(s => {
+                        const grade = s[subject];
+                        return grade ? parseInt(grade) : NaN;
+                    }).filter(g => !isNaN(g));
+                    
                     return grades.length > 0 ? (grades.reduce((a, b) => a + b, 0) / grades.length) : 0;
                 });
 
@@ -659,7 +762,10 @@
                     return '<p>Данные не загружены</p>';
                 }
 
-                const headers = Object.keys(data[0]);
+                // Используем стандартные заголовки
+                const headers = [FIELD_NAMES.class, FIELD_NAMES.name, FIELD_NAMES.math, 
+                               FIELD_NAMES.russian, FIELD_NAMES.physics, FIELD_NAMES.literature];
+                
                 let html = `
                     <table>
                         <thead>
@@ -674,7 +780,7 @@
                     const selected = selectable && index === selectedStudentIndex ? 'style="background-color: #e3f2fd;"' : '';
                     html += `<tr ${selected}>`;
                     headers.forEach(header => {
-                        html += `<td>${row[header]}</td>`;
+                        html += `<td>${row[header] || ''}</td>`;
                     });
                     html += '</tr>';
                 });
@@ -691,22 +797,22 @@
                 selectedStudentIndex = index;
 
                 const student = students[index];
-                document.getElementById('studentClass').value = student.Класс;
-                document.getElementById('studentName').value = student.ФИО;
-                document.getElementById('mathGrade').value = student.Математика;
-                document.getElementById('russianGrade').value = student.Русский_язык;
-                document.getElementById('physicsGrade').value = student.Физика;
-                document.getElementById('literatureGrade').value = student.Литература;
+                document.getElementById('studentClass').value = student[FIELD_NAMES.class] || '';
+                document.getElementById('studentName').value = student[FIELD_NAMES.name] || '';
+                document.getElementById('mathGrade').value = student[FIELD_NAMES.math] || '';
+                document.getElementById('russianGrade').value = student[FIELD_NAMES.russian] || '';
+                document.getElementById('physicsGrade').value = student[FIELD_NAMES.physics] || '';
+                document.getElementById('literatureGrade').value = student[FIELD_NAMES.literature] || '';
             }
 
             updateFileInfo() {
                 const container = document.getElementById('fileInfo');
                 if (students.length > 0) {
-                    const classes = [...new Set(students.map(s => s.Класс))];
+                    const classes = getUniqueClasses();
                     container.innerHTML = `
                         <p><strong>Загружено записей:</strong> ${students.length}</p>
                         <p><strong>Классы:</strong> ${classes.join(', ')}</p>
-                        <p><strong>Предметы:</strong> Математика, Русский язык, Физика, Литература</p>
+                        <p><strong>Предметы:</strong> ${[FIELD_NAMES.math, FIELD_NAMES.russian, FIELD_NAMES.physics, FIELD_NAMES.literature].join(', ')}</p>
                     `;
                 } else {
                     container.innerHTML = '<p>Файл не загружен</p>';
@@ -717,12 +823,12 @@
         // Глобальные функции
         function loadSampleData() {
             students = [
-                { Класс: "10A", ФИО: "Иванов А.И.", Математика: 5, Русский_язык: 4, Физика: 5, Литература: 4 },
-                { Класс: "10A", ФИО: "Петрова С.К.", Математика: 4, Русский_язык: 5, Физика: 4, Литература: 5 },
-                { Класс: "10B", ФИО: "Сидоров Д.М.", Математика: 3, Русский_язык: 4, Физика: 4, Литература: 3 },
-                { Класс: "10B", ФИО: "Козлова М.П.", Математика: 5, Русский_язык: 3, Физика: 5, Литература: 4 },
-                { Класс: "11A", ФИО: "Николаев В.С.", Математика: 4, Русский_язык: 4, Физика: 3, Литература: 5 },
-                { Класс: "11A", ФИО: "Орлова Е.Д.", Математика: 5, Русский_язык: 5, Физика: 5, Литература: 4 }
+                { [FIELD_NAMES.class]: "10A", [FIELD_NAMES.name]: "Иванов А.И.", [FIELD_NAMES.math]: 5, [FIELD_NAMES.russian]: 4, [FIELD_NAMES.physics]: 5, [FIELD_NAMES.literature]: 4 },
+                { [FIELD_NAMES.class]: "10A", [FIELD_NAMES.name]: "Петрова С.К.", [FIELD_NAMES.math]: 4, [FIELD_NAMES.russian]: 5, [FIELD_NAMES.physics]: 4, [FIELD_NAMES.literature]: 5 },
+                { [FIELD_NAMES.class]: "10B", [FIELD_NAMES.name]: "Сидоров Д.М.", [FIELD_NAMES.math]: 3, [FIELD_NAMES.russian]: 4, [FIELD_NAMES.physics]: 4, [FIELD_NAMES.literature]: 3 },
+                { [FIELD_NAMES.class]: "10B", [FIELD_NAMES.name]: "Козлова М.П.", [FIELD_NAMES.math]: 5, [FIELD_NAMES.russian]: 3, [FIELD_NAMES.physics]: 5, [FIELD_NAMES.literature]: 4 },
+                { [FIELD_NAMES.class]: "11A", [FIELD_NAMES.name]: "Николаев В.С.", [FIELD_NAMES.math]: 4, [FIELD_NAMES.russian]: 4, [FIELD_NAMES.physics]: 3, [FIELD_NAMES.literature]: 5 },
+                { [FIELD_NAMES.class]: "11A", [FIELD_NAMES.name]: "Орлова Е.Д.", [FIELD_NAMES.math]: 5, [FIELD_NAMES.russian]: 5, [FIELD_NAMES.physics]: 5, [FIELD_NAMES.literature]: 4 }
             ];
             gradeJournal.renderAllTables();
             alert('Пример данных загружен!');
@@ -732,6 +838,18 @@
             const file = event.target.files[0];
             if (!file) return;
 
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+
+            if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+                parseExcel(file);
+            } else if (fileExtension === 'csv' || fileExtension === 'txt') {
+                parseTextFile(file);
+            } else {
+                alert('Неподдерживаемый формат файла. Используйте CSV, TXT, XLSX или XLS.');
+            }
+        }
+
+        function parseTextFile(file) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
@@ -741,22 +859,85 @@
                     alert('Ошибка при чтении файла: ' + error.message);
                 }
             };
-            reader.readAsText(file);
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function parseExcel(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    // Берем первый лист
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // Преобразуем в JSON
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    if (jsonData.length === 0) {
+                        alert('Файл Excel пустой');
+                        return;
+                    }
+                    
+                    // Конвертируем данные из Excel в тот же формат, что и CSV
+                    const rawHeaders = jsonData[0];
+                    const headers = rawHeaders.map(normalizeFieldName);
+                    
+                    students = [];
+                    for (let i = 1; i < jsonData.length; i++) {
+                        const row = jsonData[i];
+                        if (row && row.length > 0) {
+                            const record = {};
+                            rawHeaders.forEach((rawHeader, index) => {
+                                const normalizedHeader = normalizeFieldName(rawHeader);
+                                record[normalizedHeader] = row[index] ? row[index].toString().trim() : '';
+                            });
+                            
+                            // Убедимся, что у нас есть все необходимые поля
+                            if (!record[FIELD_NAMES.class]) record[FIELD_NAMES.class] = '';
+                            if (!record[FIELD_NAMES.name]) record[FIELD_NAMES.name] = '';
+                            
+                            students.push(record);
+                        }
+                    }
+                    
+                    gradeJournal.renderAllTables();
+                    alert(`Успешно загружено ${students.length} записей из Excel файла`);
+                    
+                } catch (error) {
+                    alert('Ошибка при чтении Excel файла: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
         }
 
         function parseCSV(content) {
-            const lines = content.split('\n');
-            const headers = lines[0].split(',').map(h => h.trim());
+            const lines = content.split('\n').filter(line => line.trim());
+            if (lines.length === 0) {
+                alert('Файл пустой');
+                return;
+            }
+
+            const rawHeaders = lines[0].split(',').map(h => h.trim());
+            const headers = rawHeaders.map(normalizeFieldName);
             
             students = [];
             for (let i = 1; i < lines.length; i++) {
                 if (lines[i].trim()) {
                     const values = lines[i].split(',');
-                    if (values.length === headers.length) {
+                    if (values.length === rawHeaders.length) {
                         const record = {};
-                        headers.forEach((header, index) => {
-                            record[header] = values[index].trim();
+                        rawHeaders.forEach((rawHeader, index) => {
+                            const normalizedHeader = normalizeFieldName(rawHeader);
+                            record[normalizedHeader] = values[index].trim();
                         });
+                        
+                        // Убедимся, что у нас есть все необходимые поля
+                        if (!record[FIELD_NAMES.class]) record[FIELD_NAMES.class] = '';
+                        if (!record[FIELD_NAMES.name]) record[FIELD_NAMES.name] = '';
+                        
                         students.push(record);
                     }
                 }
@@ -767,19 +948,26 @@
         }
 
         function addStudent() {
+            const className = document.getElementById('studentClass').value.trim();
             const name = document.getElementById('studentName').value.trim();
+            
+            if (!className) {
+                alert('Введите название класса');
+                return;
+            }
+            
             if (!name) {
                 alert('Введите ФИО ученика');
                 return;
             }
 
             const newStudent = {
-                Класс: document.getElementById('studentClass').value,
-                ФИО: name,
-                Математика: document.getElementById('mathGrade').value || '',
-                Русский_язык: document.getElementById('russianGrade').value || '',
-                Физика: document.getElementById('physicsGrade').value || '',
-                Литература: document.getElementById('literatureGrade').value || ''
+                [FIELD_NAMES.class]: className,
+                [FIELD_NAMES.name]: name,
+                [FIELD_NAMES.math]: document.getElementById('mathGrade').value || '',
+                [FIELD_NAMES.russian]: document.getElementById('russianGrade').value || '',
+                [FIELD_NAMES.physics]: document.getElementById('physicsGrade').value || '',
+                [FIELD_NAMES.literature]: document.getElementById('literatureGrade').value || ''
             };
 
             students.push(newStudent);
@@ -793,19 +981,26 @@
                 return;
             }
 
+            const className = document.getElementById('studentClass').value.trim();
             const name = document.getElementById('studentName').value.trim();
+            
+            if (!className) {
+                alert('Введите название класса');
+                return;
+            }
+            
             if (!name) {
                 alert('Введите ФИО ученика');
                 return;
             }
 
             students[selectedStudentIndex] = {
-                Класс: document.getElementById('studentClass').value,
-                ФИО: name,
-                Математика: document.getElementById('mathGrade').value || '',
-                Русский_язык: document.getElementById('russianGrade').value || '',
-                Физика: document.getElementById('physicsGrade').value || '',
-                Литература: document.getElementById('literatureGrade').value || ''
+                [FIELD_NAMES.class]: className,
+                [FIELD_NAMES.name]: name,
+                [FIELD_NAMES.math]: document.getElementById('mathGrade').value || '',
+                [FIELD_NAMES.russian]: document.getElementById('russianGrade').value || '',
+                [FIELD_NAMES.physics]: document.getElementById('physicsGrade').value || '',
+                [FIELD_NAMES.literature]: document.getElementById('literatureGrade').value || ''
             };
 
             clearForm();
@@ -827,30 +1022,110 @@
             }
         }
 
-        function downloadJournal() {
+        function downloadJournal(format) {
             if (students.length === 0) {
                 alert('Нет данных для сохранения');
                 return;
             }
 
-            const headers = Object.keys(students[0]);
+            const headers = [FIELD_NAMES.class, FIELD_NAMES.name, FIELD_NAMES.math, 
+                           FIELD_NAMES.russian, FIELD_NAMES.physics, FIELD_NAMES.literature];
+            
+            switch(format) {
+                case 'csv':
+                    downloadCSV(headers);
+                    break;
+                case 'excel':
+                    downloadExcel(headers);
+                    break;
+                case 'txt':
+                    downloadTXT(headers);
+                    break;
+                default:
+                    alert('Неизвестный формат файла');
+            }
+        }
+
+        function downloadCSV(headers) {
+            // Добавляем BOM для корректного отображения кириллицы
+            const BOM = '\uFEFF';
+            
             const csvContent = [
                 headers.join(','),
                 ...students.map(row => 
-                    headers.map(header => row[header]).join(',')
+                    headers.map(header => {
+                        const value = row[header] || '';
+                        // Экранируем кавычки и добавляем их если есть запятые
+                        if (value.toString().includes(',') || value.toString().includes('"')) {
+                            return '"' + value.toString().replace(/"/g, '""') + '"';
+                        }
+                        return value;
+                    }).join(',')
                 )
             ].join('\n');
+            
+            const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+            downloadFile(blob, 'journal.csv');
+        }
 
-            const blob = new Blob([csvContent], { type: 'text/csv' });
+        function downloadExcel(headers) {
+            try {
+                // Подготовка данных для Excel
+                const worksheetData = [
+                    headers,
+                    ...students.map(row => headers.map(header => row[header] || ''))
+                ];
+                
+                // Создаем рабочую книгу
+                const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+                
+                // Устанавливаем ширину колонок
+                const colWidths = headers.map(() => ({ wch: 20 }));
+                worksheet['!cols'] = colWidths;
+                
+                // Создаем книгу и добавляем лист
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Журнал оценок");
+                
+                // Генерируем файл
+                const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+                const blob = new Blob([excelBuffer], { 
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+                });
+                
+                downloadFile(blob, 'journal.xlsx');
+            } catch (error) {
+                alert('Ошибка при создании Excel файла: ' + error.message);
+            }
+        }
+
+        function downloadTXT(headers) {
+            // Формируем TXT файл с разделителем в виде запятой (CSV формат в TXT)
+            const txtContent = [
+                headers.join(','),
+                ...students.map(row => 
+                    headers.map(header => row[header] || '').join(',')
+                )
+            ].join('\n');
+            
+            const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8;' });
+            downloadFile(blob, 'journal.txt');
+        }
+
+        function downloadFile(blob, filename) {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'journal.csv';
+            a.download = filename;
+            a.style.display = 'none';
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
         }
 
         function clearForm() {
+            document.getElementById('studentClass').value = '';
             document.getElementById('studentName').value = '';
             document.getElementById('mathGrade').value = '';
             document.getElementById('russianGrade').value = '';

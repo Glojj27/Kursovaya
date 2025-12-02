@@ -2,7 +2,6 @@ let students = [];
 let selectedStudentIndex = null;
 let charts = {};
 
-// Унифицированные имена полей
 const FIELD_NAMES = {
     class: 'Класс',
     name: 'ФИО',
@@ -12,7 +11,6 @@ const FIELD_NAMES = {
     literature: 'Литература'
 };
 
-// Вспомогательная функция для нормализации имен полей
 function normalizeFieldName(fieldName) {
     const field = fieldName.trim();
     const mappings = {
@@ -32,7 +30,6 @@ function normalizeFieldName(fieldName) {
     return mappings[field] || field;
 }
 
-// Вспомогательная функция для получения уникальных классов
 function getUniqueClasses() {
     const classes = new Set();
     students.forEach(student => {
@@ -103,7 +100,6 @@ class GradeJournal {
         const container = document.getElementById('gradeTable');
         container.innerHTML = this.generateTableHTML(students, true);
         
-        // Добавляем обработчики кликов на строки
         setTimeout(() => {
             const rows = container.querySelectorAll('tbody tr');
             rows.forEach((row, index) => {
@@ -412,7 +408,6 @@ class GradeJournal {
             return '<p>Данные не загружены</p>';
         }
 
-        // Используем стандартные заголовки
         const headers = [FIELD_NAMES.class, FIELD_NAMES.name, FIELD_NAMES.math, 
                        FIELD_NAMES.russian, FIELD_NAMES.physics, FIELD_NAMES.literature];
         
@@ -470,7 +465,6 @@ class GradeJournal {
     }
 }
 
-// Глобальные функции
 function loadSampleData() {
     students = [
         { [FIELD_NAMES.class]: "10A", [FIELD_NAMES.name]: "Иванов А.И.", [FIELD_NAMES.math]: 5, [FIELD_NAMES.russian]: 4, [FIELD_NAMES.physics]: 5, [FIELD_NAMES.literature]: 4 },
@@ -519,11 +513,9 @@ function parseExcel(file) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
             
-            // Берем первый лист
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
             
-            // Преобразуем в JSON
             const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
             
             if (jsonData.length === 0) {
@@ -531,7 +523,6 @@ function parseExcel(file) {
                 return;
             }
             
-            // Конвертируем данные из Excel в тот же формат, что и CSV
             const rawHeaders = jsonData[0];
             const headers = rawHeaders.map(normalizeFieldName);
             
@@ -545,7 +536,6 @@ function parseExcel(file) {
                         record[normalizedHeader] = row[index] ? row[index].toString().trim() : '';
                     });
                     
-                    // Убедимся, что у нас есть все необходимые поля
                     if (!record[FIELD_NAMES.class]) record[FIELD_NAMES.class] = '';
                     if (!record[FIELD_NAMES.name]) record[FIELD_NAMES.name] = '';
                     
@@ -584,7 +574,6 @@ function parseCSV(content) {
                     record[normalizedHeader] = values[index].trim();
                 });
                 
-                // Убедимся, что у нас есть все необходимые поля
                 if (!record[FIELD_NAMES.class]) record[FIELD_NAMES.class] = '';
                 if (!record[FIELD_NAMES.name]) record[FIELD_NAMES.name] = '';
                 
@@ -697,7 +686,6 @@ function downloadJournal(format) {
 }
 
 function downloadCSV(headers) {
-    // Добавляем BOM для корректного отображения кириллицы
     const BOM = '\uFEFF';
     
     const csvContent = [
@@ -705,7 +693,6 @@ function downloadCSV(headers) {
         ...students.map(row => 
             headers.map(header => {
                 const value = row[header] || '';
-                // Экранируем кавычки и добавляем их если есть запятые
                 if (value.toString().includes(',') || value.toString().includes('"')) {
                     return '"' + value.toString().replace(/"/g, '""') + '"';
                 }
@@ -720,24 +707,19 @@ function downloadCSV(headers) {
 
 function downloadExcel(headers) {
     try {
-        // Подготовка данных для Excel
         const worksheetData = [
             headers,
             ...students.map(row => headers.map(header => row[header] || ''))
         ];
         
-        // Создаем рабочую книгу
         const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
         
-        // Устанавливаем ширину колонок
         const colWidths = headers.map(() => ({ wch: 20 }));
         worksheet['!cols'] = colWidths;
         
-        // Создаем книгу и добавляем лист
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Журнал оценок");
         
-        // Генерируем файл
         const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([excelBuffer], { 
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
@@ -750,7 +732,6 @@ function downloadExcel(headers) {
 }
 
 function downloadTXT(headers) {
-    // Формируем TXT файл с разделителем в виде запятой (CSV формат в TXT)
     const txtContent = [
         headers.join(','),
         ...students.map(row => 
@@ -783,7 +764,6 @@ function clearForm() {
     document.getElementById('literatureGrade').value = '';
 }
 
-// Инициализация приложения
 let gradeJournal;
 document.addEventListener('DOMContentLoaded', () => {
     gradeJournal = new GradeJournal();
